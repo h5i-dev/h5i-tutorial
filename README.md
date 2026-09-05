@@ -1,4 +1,4 @@
-# h5i websec — a web security course in 42 labs
+# h5i - tutorial
 
 A hands-on course in web application security, built around
 [h5i](https://github.com/h5i-dev/h5i) and its `websec` plugin: an HTTP
