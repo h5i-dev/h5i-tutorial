@@ -13,27 +13,35 @@ This chapter is what this book found while building 42 labs against h5i 0.4.
 The engine is Rust, without Chromium or V8's ecosystem. It reads content-heavy
 pages and runs ordinary page JavaScript, and it does not implement everything.
 
-**Confirmed working in these labs**
+**Confirmed working**, on h5i 0.4.1, by probing each one:
 
-* page `<script>` execution with `--script`
+* page `<script>` execution with `--script`, and `setTimeout`
 * `fetch()`, including cross-origin, with `credentials: 'include'`
 * the same-origin policy and CORS, enforced faithfully — including a readable
   explanation on the blocked request (Lab 23)
+* `addEventListener` and synthetic dispatch (`el.click()`)
+* `<body onload>`
 * cookie jars per session, `HttpOnly`, `Set-Cookie` attributes
 * WebSocket client, both from a page and from `websec socket` (Lab 34)
 * redirects, and `--no-follow` to stop at one
 
-**Not available, or thinner than a browser**
+**Confirmed missing.** Each was reduced to a minimal page and filed upstream:
 
-* `HTMLFormElement.submit()` — a script-driven cross-origin form POST does not
-  happen (Lab 22)
-* some DOM events. `<img onerror>` did not fire where a `<script>` block did;
-  when a payload does not land, **prove the sink first** with
-  `<script>fetch('/collect?c=alive')</script>` before concluding the injection
-  failed
-* Canvas, Web Workers, IndexedDB
-* the wider set of single-page-application APIs; a page needing one gets it
-  *named* in the snapshot rather than silently blank
+| What | Effect | Issue |
+| --- | --- | --- |
+| inline `on*` attributes are never registered as handlers (`onclick`, `onerror`, `onload`, except `<body onload>`) | `<img src=x onerror=…>` and `<svg onload=…>` — the two commonest XSS payload shapes — do nothing | [h5i#609](https://github.com/h5i-dev/h5i/issues/609) |
+| subresource `load`/`error` events are never dispatched, although the fetch does go out | nothing can observe whether an image or script loaded, via attribute *or* `addEventListener` | [h5i#610](https://github.com/h5i-dev/h5i/issues/610) |
+| forms never submit — `form.submit()` is a silent no-op, and clicking a `type=submit` button sends nothing | any flow that depends on a form POST cannot be driven | [h5i#611](https://github.com/h5i-dev/h5i/issues/611) |
+
+Also absent: Canvas, Web Workers, IndexedDB, and the wider set of
+single-page-application APIs — a page needing one gets it *named* in the
+snapshot rather than silently blank.
+
+**The habit that follows from all of this:** when a payload does not land,
+**prove the sink first** with `<script>fetch('/collect?c=alive')</script>`
+before concluding the injection failed. The difference between "no XSS" and "no
+`onerror` handler" is an hour, and only one of them is a fact about the
+target.
 
 ---
 
@@ -54,6 +62,9 @@ What to do about it: prove the CSRF *conditions* with two replays — no token
 required, and `Origin`/`Referer` from another site accepted — read the
 `Set-Cookie` attributes for a missing `SameSite`, and reproduce the final step in
 a real browser before writing it up.
+
+An opt-in that makes one session behave like a browser here is requested in
+[h5i#612](https://github.com/h5i-dev/h5i/issues/612).
 
 ---
 
@@ -142,3 +153,5 @@ rather than a defect (`websec socket` exists because a benchmark needed it).
 
 A good report of a tool limit looks like a good report of a vulnerability: what
 you expected, what happened, the smallest reproduction, and what it cost you.
+[h5i#609–#612](https://github.com/h5i-dev/h5i/issues/609) are this chapter's own
+four, filed in that shape.

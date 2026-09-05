@@ -81,3 +81,7 @@ The bot again, and the collector pattern: exfiltrate to a place you can read
 with a plain replay. If a payload does not land, prove the sink first with
 `<script>fetch('/collect?id=x&c=alive')</script>` before assuming the injection
 failed — the difference between "no XSS" and "no `onerror` handler" is an hour.
+
+That distinction is real here: h5i does not fire inline `on*` handlers
+([h5i#609](https://github.com/h5i-dev/h5i/issues/609)), so this lab's payload is
+a `<script>` block. See [`docs/05-limits.md`](../../docs/05-limits.md).

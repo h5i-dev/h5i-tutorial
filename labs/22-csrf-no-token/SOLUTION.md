@@ -74,8 +74,9 @@ If (2) still succeeds, there is no origin check. Combine that with a
 h5i's engine is deliberately *stricter* than a browser in one place that
 matters here: it refuses `fetch(..., {mode: "no-cors", credentials: "include"})`
 outright, on the grounds that the caller could never check that the server
-agreed. It also does not implement `HTMLFormElement.submit()`. Both of those are
-the classic POST-CSRF vectors.
+agreed ([h5i#612](https://github.com/h5i-dev/h5i/issues/612)). It also does not
+submit forms at all ([h5i#611](https://github.com/h5i-dev/h5i/issues/611)).
+Both of those are the classic POST-CSRF vectors.
 
 So: **a GET-based CSRF is demonstrable end to end in h5i; a POST-only one is
 not.** Prove that one with the two header checks above, and reproduce it in a
