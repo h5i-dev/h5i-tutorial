@@ -1,4 +1,5 @@
 .lab-*.log
 .labs.pids
+scraping/out/
 __pycache__/
 *.pyc
