@@ -19,8 +19,12 @@ links() {   # links SELECTOR [--url URL] -> one href per line
     "$H5I" browser extract "{\"href\": [{\"selector\": \"$selector\", \"attr\": \"href\"}]}" \
         --session shop07 "$@" 2>/dev/null \
         | python3 -c 'import json,sys
+# An attribute read over every match answers a list of bare strings, and on
+# h5i 0.4.1 and earlier a list of one-key objects. Take both: a crawl should
+# not stop working because the engine got tidier.
 try:
-    for row in json.load(sys.stdin)["href"]: print(row["href"])
+    for row in json.load(sys.stdin)["href"]:
+        print(row["href"] if isinstance(row, dict) else row)
 except Exception: pass'
 }
 

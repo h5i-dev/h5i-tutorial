@@ -2,22 +2,34 @@
 
 ## The loop is correct and the answer is wrong
 
+What this lab prints depends on which engine you have, and both answers make
+the same point.
+
 ```
-# rendered before scrolling: 3
-# after a scroll: 3
+# h5i 0.4.1 and earlier          # after 0.4.1
+# rendered before scrolling: 3   # rendered before scrolling: 3
+# after a scroll: 3              # after a scroll: 6
+                                 # after a scroll: 9
 ```
 
-The termination condition — *stop when a scroll adds no items* — is the right
-condition. It is met immediately, because this engine dispatches no
-scroll-driven loading, and the loop cannot tell that apart from having reached
-the bottom.
+On the older engine the termination condition, *stop when a scroll adds no
+items*, is met on the first comparison: `scroll` moved the viewport and
+dispatched no event, so nothing lazy-loaded, and the loop cannot tell that apart
+from having reached the bottom. Three rows out of 117, no error, no warning.
 
-That failure is not specific to h5i. Every scroll loop has it. A slow network,
-a lazy-loader waiting on an intersection observer that never fires because the
-viewport is 720px tall, a rate limiter that started returning empty pages: all
-of them look, from inside the loop, exactly like the end of the data. **A stop
-condition that cannot distinguish "done" from "broken" will eventually return a
-short file and call it a success.**
+On the newer one the scroll fires the page's own handler and three more products
+render each time. The loop now works, and it is still the wrong tool: three per
+scroll means about **39 round trips** to see a dataset that was already in your
+hands. Watch the reply while it runs. `caused_requests` is empty on every one of
+those scrolls, which is the page telling you it fetched nothing, because it had
+nothing left to fetch.
+
+**Neither version fixes the stop condition, and that is the part to take away.**
+A slow network, a lazy-loader waiting on an intersection observer that never
+fires because the viewport is 720px tall, a rate limiter that started returning
+empty pages: all of them look, from inside the loop, exactly like the end of the
+data. A stop condition that cannot distinguish "done" from "broken" will
+eventually return a short file and call it a success.
 
 Where a real one comes from: a total the page states, a `next` link whose
 absence is meaningful, a `pageCount` in a JSON payload. Labs 09 and 10 are both
@@ -36,6 +48,9 @@ h5i browser extract '{"items": {"selector": "[data-items]", "attr": "data-items"
 117 products, as JSON, in an attribute on the wrapper element, in the **first
 response**. The scroll is a rendering decision made in JavaScript over data
 that had already arrived. No script needed, no scrolling needed, one request.
+
+This is why the fixed scroll changes nothing about the answer. The gesture works
+now, and it still only redraws what the first response delivered.
 
 The sibling attributes say so out loud: `data-type="scroll"` here, and
 `data-pages` on the paginated version of the same catalogue. The page is

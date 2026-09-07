@@ -21,9 +21,13 @@ container, so a row that lacks the field still contributes an empty string:
     "price": ["p.price_color"]                       # 19 — silently wrong
     "price": ["article.product_pod p.price_color"]   # 20 — one per card
 
-Values that came from `attr` arrive wrapped, because a list of attribute reads
-is a list of one-key objects: `[{"href": "..."}, ...]`. They are unwrapped
-here, so a schema that mixes text and attributes still lines up.
+Values that came from `attr` arrive wrapped on h5i 0.4.1 and earlier, because a
+list of attribute reads was a list of one-key objects: `[{"href": "..."}, ...]`.
+Later engines answer `["...", ...]`. Both are accepted here, so a scraper in
+this course produces the same CSV on either.
+
+A schema that uses `fields` needs none of this: it already answers rows, and
+`extract | python3 -c` is enough to write them out.
 """
 
 import csv
@@ -32,7 +36,7 @@ import sys
 
 
 def unwrap(value):
-    """`{"href": "/x"}` -> `/x`. An attribute read arrives wrapped in its name."""
+    """`{"href": "/x"}` -> `/x`, for the engines that wrap an attribute read."""
     if isinstance(value, dict) and len(value) == 1:
         return next(iter(value.values()))
     if value is None:

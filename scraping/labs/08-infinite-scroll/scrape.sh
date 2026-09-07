@@ -8,13 +8,15 @@ PAGE="https://webscraper.io/test-sites/e-commerce/scroll/computers/laptops"
 session scroll08 "$PAGE" --script
 
 # The naive loop: scroll, count, scroll again, stop when the count stops
-# growing. Run it and watch it terminate immediately — this engine dispatches
-# no scroll-driven loading, so the termination condition is met on the first
-# comparison and the answer is whatever the first render held.
+# growing. What it prints depends on the engine. Up to h5i 0.4.1 the scroll
+# dispatched no event, so the condition is met on the first comparison and the
+# answer is whatever the first render held. After that the page's own handler
+# runs and the count grows three at a time, which takes about 39 scrolls to
+# reach the 117 the page already had.
 #
-# The condition is right and the answer is wrong, which is the failure a
-# scroll loop is prone to everywhere: "no new items" and "no mechanism to
-# produce new items" look identical from inside the loop.
+# Either way the condition is right and the answer is wrong, which is the
+# failure a scroll loop is prone to everywhere: "no new items" and "no
+# mechanism to produce new items" look identical from inside the loop.
 count() {
     "$H5I" browser extract '{"n": ["div.thumbnail a.title"]}' --session scroll08 2>/dev/null \
         | python3 -c 'import json,sys

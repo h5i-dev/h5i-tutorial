@@ -11,6 +11,7 @@ h5i browser read URL --text                     # one page, no session
 h5i browser read URL --json                     # + the request log
 h5i browser read URL1 URL2 URL3                 # a batch
 h5i browser read URL --script                   # run the page's JavaScript
+h5i browser read URL --script --allow https://cdn.example
 
 h5i browser open URL --session s --new          # a session you will drive
 h5i browser open URL --session s --new --script
@@ -38,7 +39,8 @@ Any read verb takes `--url URL` and does navigate-then-read in one trip.
 | `"k": "SEL"` | first match's text, as a string |
 | `"k": ["SEL"]` | every match's text, as a list |
 | `"k": {"selector": "SEL", "attr": "A"}` | first match's attribute, as a string |
-| `"k": [{"selector": "SEL", "attr": "A"}]` | every match's attribute, as `[{"A": …}]` |
+| `"k": [{"selector": "SEL", "attr": "A"}]` | every match's attribute, as a list (`[{"A": …}]` on 0.4.1 and earlier) |
+| `"k": [{"selector": "SEL", "fields": {…}}]` | one object per match, sub-selectors read inside it |
 
 ```json
 {
@@ -46,6 +48,8 @@ Any read verb takes `--url URL` and does navigate-then-read in one trip.
   "prices": ["article.product_pod p.price_color"],
   "next":   {"selector": "li.next a", "attr": "href"},
   "links":  [{"selector": "h3 a", "attr": "href"}],
+  "rows":   [{"selector": "article.product_pod", "fields": {
+               "title": "h3 a", "price": "p.price_color"}}],
   "js":     ["script"]
 }
 ```
@@ -55,7 +59,8 @@ Any read verb takes `--url URL` and does navigate-then-read in one trip.
 * attributes worth knowing: `href`, `src`, `title`, `content`, `value`, `class`,
   `data-*`, `outerHTML`, `innerHTML`
 * no key matched anything → an error; one key matched nothing → an empty column
-* **no row grouping.** Anchor every selector at the row container.
+* **no row grouping without `fields`.** Use it, or anchor every selector at the
+  row container.
 
 ## Turning columns into rows
 
@@ -63,7 +68,8 @@ Any read verb takes `--url URL` and does navigate-then-read in one trip.
 h5i browser extract '{…}' --session s | python3 lib/rows.py col1 col2 col3
 ```
 
-Refuses unequal columns. Unwraps `{"href": "…"}`. Writes CSV with a header.
+Refuses unequal columns. Unwraps `{"href": "…"}` from older engines. Writes CSV
+with a header. A `fields` schema needs none of this: it is already rows.
 
 ```bash
 # the check, by hand
@@ -90,6 +96,7 @@ h5i browser snapshot   --session s                 # -> [ref=e9]
 h5i browser type   @e9 "text" --session s
 h5i browser submit @e9 --session s                 # -> {"method", "url"}
 h5i browser click  @e3 --session s
+h5i browser click  --role link --name '2015' --session s
 h5i browser select @e5 'Express shipping' --session s
 h5i browser set-checked @e4 true --session s
 h5i browser press  @e1 Enter --session s
@@ -101,9 +108,13 @@ h5i browser screenshot --session s                 # when a read surprises you
 ```
 
 * a `@ref` is valid for the snapshot it came from; take it fresh
+* `click`, `type` and `submit` also take `--role`/`--name` or `--selector`
 * `find` answers with a selector — that is what to keep
 * `set-checked` sets; a click toggles
-* `{"ok": true}` means dispatched, not effective
+* `{"ok": true}` means dispatched, not effective; `caused_requests` on the reply
+  is what it fetched
+* a scroll fires the page's `scroll` handlers (after 0.4.1), so lazy loading
+  works — check `caused_requests` before believing you needed it
 
 ## What did I actually fetch
 
@@ -114,7 +125,7 @@ h5i browser audit    --session s
 ```
 
 * written before the bytes move: not in the log ⇒ did not happen
-* `DENIED … not in the allowlist` ⇒ add `--allow ORIGIN` at open time
+* `DENIED … not in the allowlist` ⇒ add `--allow ORIGIN`, on `open` or on `read`
 * count the `200 GET`s against the pages you meant to fetch
 
 ## Pagination
