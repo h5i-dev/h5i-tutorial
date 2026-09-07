@@ -68,7 +68,11 @@ public practice sites, and a lab can fail because a site redesigned, went down,
 or throttled you — `test-all.sh` says which lab and what it got, and deciding
 which of those happened is yours.
 
-Written and verified against **h5i 0.3.9**.
+Written and verified against **h5i 0.3.9**, and re-run end to end against the
+engine as it stands after **0.4.1**. All ten labs produce the same rows on
+both. What changed between them is five of the six limits this course reported,
+so [`docs/05-limits.md`](docs/05-limits.md) now says, version by version, which
+answer to expect from your own build.
 
 ---
 
@@ -83,7 +87,7 @@ the labs mean something:
 | [`docs/02-method.md`](docs/02-method.md) | how to approach a site you have never scraped |
 | [`docs/03-cheatsheet.md`](docs/03-cheatsheet.md) | one page: every verb, every schema form, every place data hides |
 | [`docs/04-etiquette-and-scope.md`](docs/04-etiquette-and-scope.md) | rate, robots, terms, personal data — and why these ten sites |
-| [`docs/05-limits.md`](docs/05-limits.md) | where this engine is thinner than a browser, with reproductions |
+| [`docs/05-limits.md`](docs/05-limits.md) | where this engine is thinner than a browser, which limits were fixed, and the reproductions for both |
 
 **Then work the labs in order.** Each assumes the last. Give the brief a real
 attempt before opening `NOTES.md`; unlike the websec course, the writeup here

@@ -69,22 +69,27 @@ The schema is JSON: **keys you choose, values that say what to read.**
 | `"k": "SELECTOR"` | the first match's text | a string |
 | `"k": ["SELECTOR"]` | every match's text | a list of strings |
 | `"k": {"selector": "S", "attr": "A"}` | the first match's attribute | a string |
-| `"k": [{"selector": "S", "attr": "A"}]` | every match's attribute | a list of `{"A": value}` |
+| `"k": [{"selector": "S", "attr": "A"}]` | every match's attribute | a list of strings |
+| `"k": [{"selector": "S", "fields": {…}}]` | one object per match, sub-selectors read inside it | a list of objects |
 
 ```json
 {
   "title":  "div.product_main h1",
   "prices": ["article.product_pod p.price_color"],
   "next":   {"selector": "li.next a", "attr": "href"},
-  "links":  [{"selector": "h3 a", "attr": "href"}]
+  "links":  [{"selector": "h3 a", "attr": "href"}],
+  "rows":   [{"selector": "article.product_pod", "fields": {
+               "title": "h3 a", "price": "p.price_color"}}]
 }
 ```
 
 Four things the tables do not say, each of which costs an hour the first time:
 
-**An attribute read inside an array comes back wrapped** in the attribute's own
-name: `[{"href": "…"}, …]`, not `["…", …]`. A list of attribute reads is a list
-of one-key objects. `lib/rows.py` unwraps them.
+**On h5i 0.4.1 and earlier, an attribute read inside an array comes back
+wrapped** in the attribute's own name: `[{"href": "…"}, …]` rather than
+`["…", …]`. Later versions answer the flat list the table shows. `lib/rows.py`
+handles both, so the labs run either way; your own code is where the difference
+shows. See [`05-limits.md`](05-limits.md#52-an-attribute-read-inside-an-array).
 
 **URLs are resolved** against the page they came from. `href="page-2.html"`
 answers as `https://…/catalogue/page-2.html`, so a crawl needs no URL
@@ -93,16 +98,16 @@ arithmetic.
 **Text is trimmed** at both ends, and not internally. Whitespace inside a value
 survives.
 
-**There is no row grouping.** Every key is matched against the whole document,
-independently. That is the single most important property of this verb and
-section 1.4 is about it.
+**A key without `fields` has no row grouping.** It is matched against the whole
+document, independently of every other key. That is the single most important
+property of this verb and section 1.4 is about it.
 
 Errors are prose, not JSON. A schema where **no key matched anything** is
 refused with a sentence, because an object full of nulls would look like an
 answer. A schema where *one* key matched nothing is a normal answer with an
 empty column — a fact about the page (Lab 03).
 
-## 1.4 There are no rows, only columns
+## 1.4 Columns, and the rows you can ask for instead
 
 ```json
 {"title": ["…20 titles…"], "price": ["…20 prices…"]}
@@ -113,8 +118,20 @@ the moment one card lacks a price and the price column is nineteen long: every
 row after the gap pairs a title with its neighbour's price, and no check
 downstream can detect it.
 
-The fix is in the schema, not in the code that consumes it. **Anchor every
-selector at the element that is one row:**
+**Ask for rows and the question does not arise.** A spec with `fields` reads one
+object per match, and each sub-selector is read inside that match:
+
+```json
+"rows": [{"selector": "article.product_pod",
+          "fields": {"title": "h3 a", "price": "p.price_color"}}]
+```
+
+A card with no price contributes `"price": null` and keeps its place in the
+list. There is nothing to zip, so there is nothing to misalign.
+
+The flat form is still shorter to type, still the one you will reach for first,
+and still the one that breaks. When you use it, **anchor every selector at the
+element that is one row:**
 
 ```json
 "price": ["p.price_color"]                       ← 19, silently wrong
@@ -124,9 +141,9 @@ selector at the element that is one row:**
 `lib/rows.py` refuses to zip columns of unequal length and prints the lengths.
 Use it, or write the same check.
 
-For a field that genuinely repeats — a quote's tags — anchoring does not help,
-because the flat list has already discarded which parent each match came from.
-Lab 02 covers the three ways out.
+For a field that genuinely repeats, like a quote's tags, neither helps: one row
+holds several values, so no row-shaped answer flattens it for you. Lab 02 covers
+the three ways out.
 
 ## 1.5 The request log
 
@@ -163,6 +180,13 @@ For a scraper this is mostly a gift: you did not want the analytics beacon.
 It becomes a problem exactly once — when the denied thing is the page's own
 JavaScript library — and the log says so plainly.
 
+`read` takes the same flag, in versions after 0.4.1, so a one-shot read of a
+page written in a CDN-served library no longer needs a session:
+
+```bash
+h5i browser read https://site.example/ --script --allow https://cdn.example
+```
+
 ## 1.7 Driving a page
 
 ```bash
@@ -170,6 +194,7 @@ h5i browser snapshot    --session s          # -> - textbox "Search" [ref=e9]
 h5i browser type   @e9 "New York" --session s
 h5i browser submit @e9 --session s           # -> {"method": "GET", "url": "…?q=New+York"}
 h5i browser click  @e3 --session s
+h5i browser click  --role button --name 'Sign in' --session s
 h5i browser select @e5 'Express shipping' --session s
 h5i browser set-checked @e4 true --session s
 h5i browser press  @e1 Enter --session s
@@ -189,7 +214,14 @@ left to run … waiting longer cannot change this"* — instead of timing out an
 leaving you to wonder whether five more seconds would have helped (Lab 06).
 
 **`{"ok": true}` on a click means dispatched, not effective.** What happened
-next is in `requests`.
+next is in `requests`, and in the reply itself: `caused_requests` names the
+fetches that click made, and `settled` says the page went quiet afterwards.
+
+**A scroll is an event, not just an offset.** In versions after 0.4.1 it fires
+the page's own `scroll` handlers and re-checks its intersection observers, so a
+lazy-loading page loads as you go. Read `caused_requests` on the reply before
+deciding the gesture was necessary: empty means the page rendered what it
+already had, and Lab 08 is about what to do with that answer.
 
 ## 1.8 A worked minute
 

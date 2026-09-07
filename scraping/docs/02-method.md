@@ -126,10 +126,14 @@ When a click, a scroll or a widget seems necessary:
 4. Reconsider whether a browser was needed at all.
 
 `{"ok": true}` from a click means the click was dispatched. Whether anything
-happened is a separate question with a separate answer in the request log —
-and on this engine, jQuery-bound handlers do not fire at all
-([`05-limits.md`](05-limits.md)). Do not retry a click in a loop; look at what
-it did.
+happened is a separate question with a separate answer in the request log, and
+in the reply's own `caused_requests`. Do not retry a click in a loop; look at
+what it did.
+
+Engine versions differ in what a click can reach, and
+[`05-limits.md`](05-limits.md) is the version-by-version account: jQuery-bound
+handlers did not fire at all up to 0.4.1, which made "the click did nothing" the
+commonest false conclusion in this course.
 
 ## 2.8 Decide what one run costs before you start
 

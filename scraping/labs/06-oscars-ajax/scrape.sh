@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Lab 06 — Scrape This Site, Oscar Winning Films: a click that loads nothing,
-# and the endpoint underneath it.
+# Lab 06 — Scrape This Site, Oscar Winning Films: a click that may or may not
+# load anything, and the endpoint underneath it either way.
 set -uo pipefail
 . "$(dirname "$0")/../../lib/h5i.sh"
 
@@ -27,9 +27,10 @@ try: print(len(json.load(sys.stdin)["title"]))
 except Exception: print(0)')"
 echo "# films after the click: $got" >&2
 
-# Step two, when step one gives you zero. Do not conclude the site is empty and
-# do not retry the click. Read what the page fetched, then read the script that
-# was supposed to fetch it — the URL is written in the source, in plain text.
+# Step two, when step one gives you zero — which is what h5i 0.4.1 and earlier
+# do here, because jQuery never finished loading. Do not conclude the site is
+# empty and do not retry the click. Read the script that was supposed to fetch
+# the data: the URL is written in the source, in plain text.
 if [ "$got" = 0 ]; then
     echo "# the click fired no request. The handler is in the page's own script:" >&2
     "$H5I" browser extract '{"js": ["script"]}' --session oscars06 \
@@ -43,8 +44,9 @@ for line in (call.group(0) if call else "no $.ajax call in the page").splitlines
 fi
 
 # The endpoint answers JSON, needs no script, and is one request per year. That
-# is what the site's own brief tells you to look for, and it is what a scraper
-# should be asking for even on a day the click works.
+# is what the site's own brief tells you to look for, and it stays the right
+# target on an engine where the click works: fewer requests, no rendering, no
+# 1.5-second delay, and data that is already typed.
 pace
 "$H5I" browser read "$SITE?ajax=true&year=$YEAR" --text --json \
     | python3 -c '

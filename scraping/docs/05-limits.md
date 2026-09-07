@@ -6,94 +6,145 @@ confidently. This chapter is what this course found while building ten labs
 against **h5i 0.3.9**, each item reduced to the smallest reproduction that
 still shows it.
 
+Six of those reproductions were filed. Five are now fixed, which is the reason
+this chapter is written the way it is: **a limit is a fact about a version, not
+about a tool.** Every section below says what the engine did, where that
+stands, and what the reproduction is, so you can find out in one command which
+of the two you are holding.
+
+| | Was | Now |
+| --- | --- | --- |
+| [5.1](#51-extract-returns-columns-not-rows) | `extract` had no notion of a row | fixed in 0.4: a `fields` spec reads one object per match |
+| [5.2](#52-an-attribute-read-inside-an-array) | an array of attribute reads came back wrapped | fixed after 0.4.1: a flat list of values |
+| [5.3](#53-jquery-1x) | jQuery 1.x threw before defining `$` | fixed after 0.4.1 |
+| [5.4](#54-scroll-driven-loading) | `scroll` moved the page and told it nothing | fixed after 0.4.1 |
+| [5.5](#55-a-session-grants-one-origin) | `read` had no `--allow` | fixed after 0.4.1 |
+| [5.6](#56-the-verb-surface) | `click` took a `@ref` and nothing else | fixed in 0.4.1: `--role`, `--name`, `--selector` |
+| [5.7](#57-what-this-engine-is-not-for) | what the engine is not for | unchanged, and not a defect |
+
+"After 0.4.1" means merged into h5i's `main` and shipping in the next release
+([h5i#619](https://github.com/h5i-dev/h5i/pull/619)). `h5i --version` tells you
+which side of that you are on, and every section carries a probe that tells you
+the same thing by behaviour.
+
 ---
 
 ## 5.1 `extract` returns columns, not rows
 
-This is a design property rather than a defect, and it is the one that costs
-people data.
-
-Every key in the schema is matched against the whole document independently.
-There is no way to say "for each product card, read these four things." So a
-schema returns a set of flat lists, and turning them into records means zipping
-them, and a zip of unequal lists is silently wrong rather than an error.
+Every key in the schema is matched against the whole document independently, so
+a flat schema returns a set of flat lists. Turning those into records means
+zipping them, and a zip of unequal lists is silently wrong rather than an error.
 
 ```bash
-# 20 titles, 19 prices — one card has no price
+# 20 titles, 19 prices. One card has no price.
 {"title": [...20...], "price": [...19...]}
 ```
 
-**Mitigation.** Anchor every selector at the row container, so a row missing
-the field still contributes an empty value:
+**Fixed in 0.4.** A spec with `fields` reads one object per match, with every
+sub-selector scoped to that match, which is the row grouping this section was
+written to say the engine lacked:
 
-```json
-"price": ["article.product_pod p.price_color"]
+```bash
+h5i browser extract '{"rows": [{"selector": "article.product_pod", "fields": {
+    "title": "h3 a", "price": "p.price_color"}}]}' --session s
 ```
 
-Then check the lengths before writing anything. `lib/rows.py` refuses unequal
-columns and prints them.
+A row that is missing the field contributes `null` and keeps its place, so
+there is nothing to zip and nothing to misalign.
 
-**Where anchoring is not enough:** a genuinely one-to-many field, like a
-quote's tags. The flat list has discarded which parent each match came from,
-and no schema recovers it. Lab 02's three routes: find where the page already
-joined them (a `<meta itemprop="keywords">`), read the rows one at a time, or
-take each row's `outerHTML` and parse inside it.
+**The old advice still applies to a flat schema**, because a flat schema is
+still the shortest thing to type and still the thing that breaks: anchor every
+selector at the row container, and check the lengths before writing anything.
+`lib/rows.py` refuses unequal columns and prints them.
 
-## 5.2 An attribute read inside an array comes back wrapped
+**Where neither helps:** a genuinely one-to-many field, like a quote's tags. One
+row holds several, so no row-shaped answer flattens it for you. Lab 02's three
+routes stand: find where the page already joined them (a `<meta
+itemprop="keywords">`), read the rows one at a time, or take each row's
+`outerHTML` and parse inside it.
+
+## 5.2 An attribute read inside an array
 
 ```json
 "links": [{"selector": "h3 a", "attr": "href"}]
-→ [{"href": "https://…"}, {"href": "https://…"}]
-
-"next": {"selector": "li.next a", "attr": "href"}
-→ "https://…"
 ```
 
-The scalar form gives you the value; the array form gives you a list of
-one-key objects. Consistent once you know, surprising the first time, and
-`lib/rows.py` unwraps it.
+On 0.4.1 that answers `[{"href": "…"}, {"href": "…"}]`: a list of one-key
+objects, where the scalar form of the same spec answers a bare string.
 
-## 5.3 jQuery 1.x does not initialise
+**Fixed after 0.4.1.** The array form now differs from the scalar form in arity
+and in nothing else, so the same schema answers `["https://…", "https://…"]`. A
+match without the attribute keeps its place as `null`, so the list still lines
+up with a sibling column read over the same selector.
 
-The sharpest limit in this course, and the reason Lab 06 is shaped the way it
-is. On a page that loads jQuery 1.11.3 — even from an allowed origin, even with
-a clean `200` in the request log:
+`lib/rows.py` unwraps a one-key object and passes a string through, so the labs
+in this course produce the same CSV on either version. Your own code may not:
+if you wrote `row["href"]`, that is the line to look at.
+
+## 5.3 jQuery 1.x
+
+The sharpest limit this course found, and the reason Lab 06 is shaped the way
+it is. On 0.4.1, a page that loads jQuery 1.11.3 from an allowed origin, with a
+clean `200` in the request log:
 
 ```
 $ h5i browser read http://localhost/page --script --json
 console:     [{"level": "error", "text":
   "jquery.min.js: TypeError: cannot convert 'null' or 'undefined' to object (jquery.min.js:2:212)"}]
-unsupported: [{"api": "Element.attachEvent", "calls": 1}]
 text:        "jQuery UNDEFINED"
 ```
 
-jQuery 1.x feature-detects the IE-era `Element.attachEvent`, which this engine
-does not implement, and throws before it finishes defining `$`. Everything the
-page would have bound inside `$(document).ready` is therefore never bound, and
-a click on such a page dispatches onto an element listening to nothing.
+**Fixed after 0.4.1**, and the diagnosis is worth reading even now, because it
+is what this kind of failure looks like from the outside. jQuery's support
+probe asks `"onsubmit" in window`, which was false because the engine's window
+carried only the window-specific handler properties. The false answer sent
+jQuery down its Internet-Explorer branch, which reads
+`div.attributes["onsubmit"].expando`, and the engine's `NamedNodeMap` had no
+named lookup, so the read was `undefined` and the property access threw. The
+library never finished defining `$`, so nothing inside `$(document).ready` was
+ever bound, and a click on such a page dispatched onto an element listening to
+nothing. Two missing pieces of ordinary DOM, and the visible symptom was one of
+the most widely deployed libraries on the web being absent.
 
-**Confirmed working** on the same engine, by reducing each to a minimal page:
+The probe, on the version you have:
+
+```bash
+h5i browser read 'https://www.scrapethissite.com/pages/ajax-javascript/' \
+  --script --allow https://ajax.googleapis.com --json \
+  | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["snapshot"]["notes"])'
+```
+
+**Confirmed working** on both versions, by reducing each to a minimal page:
 
 | | |
 | --- | --- |
 | inline `<script>` that mutates the DOM | runs |
 | `addEventListener('click', …)`, and `click` dispatching to it | runs |
-| `DOMContentLoaded` | fires |
-| `window` `load` | fires |
-| `setTimeout` | fires |
+| `DOMContentLoaded`, `window` `load`, `setTimeout` | fire |
 | a cross-origin `<script src>` from an `--allow`ed origin | fetched **and executed** |
 
-So "JavaScript does not work here" is the wrong summary. Ordinary page script
-works. One widely-deployed library does not, and it takes every page written
-against it with it.
+So "JavaScript does not work here" was the wrong summary then and is the wrong
+summary now. **What to do when a page seems inert** has not changed: read
+`console` and `unsupported` from `h5i browser read URL --script --json` before
+concluding anything. They name the failing script and the missing API, and that
+is the difference between an hour and a week.
 
-**What to do.** Read `console` and `unsupported` from `h5i browser read URL
---script --json` before concluding anything about a page that seems inert. They
-name the failing script and the missing API. Then use Lab 06's route: find the
-request the page would have made, in its own `<script>` source, and make it
-yourself.
+**Two more, found by re-running this chapter against the fixed engine.** With
+jQuery alive, Lab 06's click reaches the handler and the handler fires its
+request, and the films still did not appear. Following the link's `href="#"`
+*refetched the page*, throwing away the table the handler had just drawn, and a
+handler calling `preventDefault()` was overridden the same way. So the click
+worked and the page did not keep it, which reads from outside exactly like the
+dead click above and is a completely different fault.
 
-## 5.4 Scroll-driven loading does not fire
+The reproduction is three lines of HTML: an `<a href="#">` whose handler appends
+a node, clicked once. Both are fixed in h5i's `fix-scripted-clicks`, later than
+the five fixes above, so an engine can have jQuery working and this still
+pending. Lab 06's writeup has the three-way table that tells them apart.
+
+## 5.4 Scroll-driven loading
+
+On 0.4.1:
 
 ```
 # rendered before scrolling: 3
@@ -101,24 +152,37 @@ yourself.
 # after a scroll: 3
 ```
 
-`h5i browser scroll` moves the page, and on the sites here it did not cause any
-lazy-loader to fetch more. `wait-for` is unusually informative about why:
+`h5i browser scroll` moved the viewport and dispatched nothing, so a page whose
+lazy-loader listens for the `scroll` event never heard the gesture.
 
+**Fixed after 0.4.1.** A scroll now fires the page's own `scroll` handlers and
+re-checks its intersection observers at the new offset, so an infinite-scroll
+page loads as you go:
+
+```bash
+h5i browser open https://webscraper.io/test-sites/e-commerce/scroll/computers/laptops \
+    --session s --new --script
+h5i browser extract '{"n": ["div.thumbnail a.title"]}' --session s   # 3
+h5i browser scroll 4000 --session s
+h5i browser extract '{"n": ["div.thumbnail a.title"]}' --session s   # 6
 ```
-not found after 0ms, and the only work left on this page is 2 self-rescheduling
-timer(s) — an animation or polling loop, which will not converge no matter how
-long you wait
-```
 
-**Why this is more than an h5i problem.** A scroll loop's termination condition
-— *stop when a scroll adds nothing* — cannot distinguish "reached the end" from
-"the mechanism never ran". It is met immediately here, and it is met just as
-silently on a real browser whose viewport is too short to trigger an
-intersection observer, or whose fifth page was rate-limited.
+**The lesson this section was written for survives the fix, and Lab 08 is
+still the lab it was.** Three points, in order of how much they cost:
 
-**What to do.** Look for the data in the first response before automating the
-gesture. Lab 08's page carries all 117 products in a `data-items` attribute:
-the scroll was a rendering decision over data that had already arrived.
+*The stop condition still cannot tell "reached the end" from "the mechanism
+never ran".* It was met immediately on 0.4.1; it is met just as silently on any
+browser whose viewport is too short to trigger an observer, or whose fifth page
+was rate-limited. A loop that stops when a scroll adds nothing is guessing.
+
+*The gesture is expensive.* That page renders three more products per scroll,
+so reaching all 117 is about 39 round trips through the verb layer.
+
+*And the request log says they bought nothing.* `caused_requests` is empty on
+every one of those scrolls, because all 117 products were in the first response
+all along, in a `data-items` attribute. Look for the data in the first response
+before automating the gesture: that is Lab 08, and the fix to the scroll verb
+makes the point sharper rather than retiring it.
 
 ## 5.5 A session grants one origin
 
@@ -130,35 +194,39 @@ DENIED GET https://ajax.googleapis.com/… — origin `https://ajax.googleapis.c
        is not in the allowlist
 ```
 
-Usually a gift — you did not want the analytics beacon, and not fetching it is
+Usually a gift: you did not want the analytics beacon, and not fetching it is
 faster. Occasionally the whole problem, when the denied thing is the library the
 page is written in. `--allow ORIGIN` at open time, repeatable.
 
-**`read` has no `--allow`.** Naming the URL is what grants it, and nothing else
-is reachable. When a page needs a third-party script, it needs `open --allow`,
-or a box with an allowlist in `.h5i/env.toml`.
+**`read --allow` was added after 0.4.1.** Naming the URL still grants its
+origin, which is the whole allowlist for most reads. When it is not, the flag is
+now there rather than forcing a session:
 
-## 5.6 The verb surface is narrower than the shipped skill describes
-
-`h5i skill show browser` documents `click --role button --name 'Sign in'`. On
-0.3.9:
-
-```
-$ h5i browser click --role link --name 2015
-error: unexpected argument '--role' found
+```bash
+h5i browser read 'https://www.scrapethissite.com/pages/ajax-javascript/' \
+    --script --allow https://ajax.googleapis.com --text
 ```
 
-`click` and `type` take a `@ref` only. `find`, `select` and `set-checked` do
-take `--role` / `--selector` / `--name`. `h5i <command> --help` is the
-authoritative list and cannot go stale; the skill text can.
+Inside a box it can only narrow: the box's own egress list is enforced outside
+the engine, and a flag cannot widen it.
 
-Note also that `find` answers with a **CSS selector**, not a `@ref`:
+## 5.6 The verb surface
+
+On 0.3.9, `click` and `type` took a `@ref` and refused a locator, while the
+shipped skill documented `click --role button --name 'Sign in'`.
+
+**Fixed in 0.4.1.** `click`, `type` and `submit` take `--role`/`--name` or
+`--selector`, the same locators `find`, `select` and `set-checked` take.
+`h5i <command> --help` is still the authoritative list and still cannot go
+stale, which is the durable half of this section.
+
+`find` answers with a **CSS selector**, not a `@ref`:
 
 ```json
 {"count": 1, "matches": [{"role": "textbox", "name": "Search for Teams:", "selector": "#q"}]}
 ```
 
-That is the better artefact anyway — a `@ref` is valid only for the snapshot it
+That is the better artefact anyway: a `@ref` is valid only for the snapshot it
 came from, and a selector survives.
 
 ## 5.7 What this engine is not for
@@ -181,7 +249,12 @@ that is the property worth having.
 
 Reduce it to the smallest page that still shows it, capture `console` and
 `unsupported` from `h5i browser read … --script --json`, and say what you
-expected, what happened, and what it cost you. §5.3 and §5.4 are this chapter's
-own two, found that way.
+expected, what happened, and what it cost you.
+
+That is not a formality here. §5.3 and §5.4 were this chapter's own two, found
+that way, filed with those reproductions, and fixed in the engine within the
+week. The two click bugs at the end of §5.3 were found by re-running the same
+reproductions against the fixed engine, which is the other half of the habit:
+**a limit that goes away deserves the same reduction as a limit that appears.**
 
 Back to [`../README.md`](../README.md).
